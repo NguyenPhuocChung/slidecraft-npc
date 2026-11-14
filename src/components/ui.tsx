@@ -77,22 +77,89 @@ export function Field({ label, children, hint, className }: { label: ReactNode; 
 
 export const inputCls = 'h-8 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-[13px] text-ink-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-ink-700 dark:bg-ink-850 dark:text-ink-100';
 
-export function NumberInput({ value, onChange, min, max, step = 1, suffix, className, title }: { value: number | undefined; onChange: (v: number) => void; min?: number; max?: number; step?: number; suffix?: string; className?: string; title?: string }) {
-  const [draft, setDraft] = useState<string>(value === undefined ? '' : String(Math.round(value * 100) / 100));
-  useEffect(() => { setDraft(value === undefined ? '' : String(Math.round(value * 100) / 100)); }, [value]);
+const roundStep = (v: number, step: number) => { const d = Math.max(0, (String(step).split('.')[1] ?? '').length); return Number(v.toFixed(Math.min(6, d + 2))); };
+/** Parse "1,5" / "1.5" / "-2" typed by people using a Vietnamese keyboard. */
+function parseTyped(s: string): number {
+  const t = s.trim().replace(/\s/g, '').replace(/[°%]|px|ms|s$/gi, '');
+  if (/^-?\d+,\d+$/.test(t)) return parseFloat(t.replace(',', '.'));
+  return parseFloat(t.replace(/,/g, ''));
+}
+
+/**
+ * Number box with visible ▲/▼ stepper buttons.
+ * Click = ±step · Shift+click = ±10×step · hold the button to repeat ·
+ * ↑/↓ keys and the mouse wheel (while focused) also change the value. Respects min/max.
+ */
+export function NumberInput({ value, onChange, min, max, step = 1, suffix, className, title, testId, ariaLabel }: { value: number | undefined; onChange: (v: number) => void; min?: number; max?: number; step?: number; suffix?: string; className?: string; title?: string; testId?: string; ariaLabel?: string }) {
+  const fmt = (v: number | undefined) => (v === undefined || Number.isNaN(v) ? '' : String(Math.round(v * 1000) / 1000));
+  const [draft, setDraft] = useState<string>(fmt(value));
+  const [focused, setFocused] = useState(false);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const live = useRef(value);
+  live.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const input = useRef<HTMLInputElement>(null);
+  const timer = useRef<{ t?: ReturnType<typeof setTimeout>; i?: ReturnType<typeof setInterval> }>({});
+  useEffect(() => { setDraft(fmt(value)); }, [value]);
+  const clamp = (v: number) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v));
   const commit = () => {
-    const v = parseFloat(draft);
-    if (Number.isNaN(v)) { setDraft(value === undefined ? '' : String(value)); return; }
-    const c = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v));
-    if (c !== value) onChange(c);
+    const v = parseTyped(draft);
+    if (Number.isNaN(v)) { setDraft(fmt(value)); return; }
+    const c = clamp(v);
+    if (c !== value) onChange(c); else setDraft(fmt(value));
   };
+  const bump = (dir: 1 | -1, big = false) => {
+    const typed = parseTyped(draftRef.current);
+    const base = Number.isNaN(typed) ? (live.current ?? 0) : typed;
+    const next = clamp(roundStep(base + dir * step * (big ? 10 : 1), step));
+    live.current = next;
+    draftRef.current = fmt(next);
+    setDraft(fmt(next));
+    onChangeRef.current(next);
+  };
+  const stopRepeat = () => { clearTimeout(timer.current.t); clearInterval(timer.current.i); timer.current = {}; };
+  useEffect(() => stopRepeat, []);
+  const startRepeat = (dir: 1 | -1, big: boolean) => {
+    stopRepeat();
+    bump(dir, big);
+    timer.current.t = setTimeout(() => { timer.current.i = setInterval(() => bump(dir, big), 70); }, 380);
+  };
+  // Wheel only while the box has focus (so scrolling the panel never changes values by accident).
+  useEffect(() => {
+    const el = input.current;
+    if (!el || !focused) return;
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); bump(e.deltaY < 0 ? 1 : -1, e.shiftKey); };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const atMax = max !== undefined && (value ?? -Infinity) >= max;
+  const atMin = min !== undefined && (value ?? Infinity) <= min;
+  const stepBtn = 'flex h-1/2 w-5 items-center justify-center text-ink-400 hover:bg-ink-100 hover:text-ink-800 active:bg-brand-100 disabled:opacity-30 dark:hover:bg-ink-700 dark:hover:text-white';
+  const hint = tr('Click ▲/▼ to change by {step} (Shift = ×10). Hold to repeat. Mouse wheel works while the box is selected.', { step });
   return (
-    <div className={cx('relative', className)} title={title}>
-      <input className={cx(inputCls, suffix && 'pr-7')} value={draft} inputMode="decimal" onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => {
-        if (e.key === 'Enter') commit();
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const v = (value ?? 0) + (e.key === 'ArrowUp' ? 1 : -1) * step * (e.shiftKey ? 10 : 1); onChange(Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v))); }
-      }} />
-      {suffix && <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-ink-400">{suffix}</span>}
+    <div className={cx('relative', className)} title={title ? `${title} — ${hint}` : hint} data-testid={testId} data-number-input>
+      <input ref={input} aria-label={ariaLabel ?? title} className={cx(inputCls, 'pr-6', suffix && 'pr-11')} value={draft} inputMode="decimal"
+        onChange={(e) => setDraft(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); commit(); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') setDraft(fmt(value));
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); bump(e.key === 'ArrowUp' ? 1 : -1, e.shiftKey); }
+        }} />
+      {suffix && <span className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 text-[11px] text-ink-400">{suffix}</span>}
+      <div className="absolute inset-y-px right-px flex w-5 flex-col overflow-hidden rounded-r-[7px] border-l border-ink-200 dark:border-ink-700">
+        <button type="button" tabIndex={-1} aria-label={tr('Increase')} data-step="up" disabled={atMax} className={stepBtn}
+          onPointerDown={(e) => { e.preventDefault(); startRepeat(1, e.shiftKey); }} onPointerUp={stopRepeat} onPointerLeave={stopRepeat} onPointerCancel={stopRepeat}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') bump(1, e.shiftKey); }}>
+          <svg width="8" height="5" viewBox="0 0 8 5" aria-hidden><path d="M0 5 L4 0 L8 5 Z" fill="currentColor" /></svg>
+        </button>
+        <button type="button" tabIndex={-1} aria-label={tr('Decrease')} data-step="down" disabled={atMin} className={cx(stepBtn, 'border-t border-ink-200 dark:border-ink-700')}
+          onPointerDown={(e) => { e.preventDefault(); startRepeat(-1, e.shiftKey); }} onPointerUp={stopRepeat} onPointerLeave={stopRepeat} onPointerCancel={stopRepeat}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') bump(-1, e.shiftKey); }}>
+          <svg width="8" height="5" viewBox="0 0 8 5" aria-hidden><path d="M0 0 L8 0 L4 5 Z" fill="currentColor" /></svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -144,7 +211,7 @@ export function Section({ title, children, actions, defaultOpen = true }: { titl
 
 export function Badge({ children, tone = 'neutral', className }: { children: ReactNode; tone?: 'neutral' | 'green' | 'amber' | 'red' | 'brand' | 'blue'; className?: string }) {
   return (
-    <span className={cx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium', {
+    <span className={cx('inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium', {
       neutral: 'bg-ink-100 text-ink-600 dark:bg-ink-800 dark:text-ink-300', green: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
       amber: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300', red: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300',
       brand: 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300', blue: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
@@ -234,7 +301,7 @@ export function Popover({ trigger, children, align = 'left', width = 260 }: { tr
     <div className="relative" ref={anchor}>
       {trigger(open, () => setOpen((o) => !o))}
       {open && pos && createPortal(
-        <div ref={panel} data-popover className="fixed z-[150] overflow-y-auto rounded-xl border border-ink-200 bg-white p-1.5 shadow-xl dark:border-ink-700 dark:bg-ink-900" style={{ left: pos.left, top: pos.top, width, maxHeight: pos.maxH }}>
+        <div ref={panel} data-popover className="fixed z-[210] overflow-y-auto rounded-xl border border-ink-200 bg-white p-1.5 shadow-xl dark:border-ink-700 dark:bg-ink-900" style={{ left: pos.left, top: pos.top, width, maxHeight: pos.maxH }}>
           {children(() => setOpen(false))}
         </div>,
         document.body,

@@ -28,9 +28,9 @@ export interface SlideRendererProps {
   rootRef?: React.Ref<HTMLDivElement>;
 }
 
-function Background({ slide, theme }: { slide: Slide; theme: Theme }) {
+function Background({ slide, theme, assets }: { slide: Slide; theme: Theme; assets?: Presentation['assets'] }) {
   const bg = slide.background ?? theme.background;
-  const { src } = useImageSrc(bg?.type === 'image' ? bg.image : undefined, undefined, 16, 9);
+  const { src } = useImageSrc(bg?.type === 'image' ? bg.image : undefined, assets, 16, 9);
   return <div style={{ position: 'absolute', inset: 0, ...backgroundCss(bg, theme, src ?? undefined) }} data-slide-bg />;
 }
 
@@ -43,7 +43,7 @@ export const SlideRenderer = memo(function SlideRenderer({ slide, presentation, 
   return (
     <div className={className} style={{ width: W * scale, height: H * scale, position: 'relative', overflow: 'hidden', ...style }} data-slide-id={slide.id}>
       <div ref={rootRef} style={{ width: W, height: H, transform: `scale(${scale})`, transformOrigin: '0 0', position: 'absolute', left: 0, top: 0, overflow: 'hidden', fontFamily: fontStack(theme.fonts.body), color: theme.colors.text }} data-slide-canvas data-theme-mode={theme.mode}>
-        <Background slide={slide} theme={theme} />
+        <Background slide={slide} theme={theme} assets={presentation.assets} />
         {sorted.map((el) => {
           if (el.visible === false && mode !== 'edit') return null;
           const hidden = hiddenIds?.has(el.id);

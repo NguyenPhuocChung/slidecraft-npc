@@ -3,7 +3,7 @@ import { tr } from '@/i18n';
 import type { Gradient, Theme } from '@/types/schema';
 import { THEME_TOKENS, resolveColor } from '@/themes/themes';
 import { parseColor, toHex6 } from '@/utils/color';
-import { Popover, cx, inputCls } from '@/components/ui';
+import { NumberInput, Popover, cx, inputCls } from '@/components/ui';
 
 export function ColorField({ value, onChange, theme, allowNone, label }: { value: string | undefined; onChange: (v: string | undefined) => void; theme: Theme; allowNone?: boolean; label?: string }) {
   const resolved = resolveColor(value, theme, 'transparent');
@@ -47,13 +47,13 @@ export function GradientField({ value, onChange, theme }: { value: Gradient | un
     <div className="space-y-1.5 rounded-lg border border-ink-100 p-2 dark:border-ink-800">
       <div className="flex gap-1.5">
         <select className={cx(inputCls, 'h-7 text-xs')} value={value.type} onChange={(e) => onChange({ ...value, type: e.target.value as 'linear' | 'radial' })}><option value="linear">{tr('Linear')}</option><option value="radial">{tr('Radial')}</option></select>
-        {value.type === 'linear' && <input type="number" className={cx(inputCls, 'h-7 w-20 text-xs')} value={value.angle ?? 0} onChange={(e) => onChange({ ...value, angle: Number(e.target.value) })} title={tr('Angle °')} />}
+        {value.type === 'linear' && <NumberInput className="w-24 shrink-0" value={value.angle ?? 0} min={-360} max={360} step={5} suffix="°" onChange={(v) => onChange({ ...value, angle: v })} title={tr('Angle °')} />}
         <button className="text-xs text-red-600" onClick={() => onChange(undefined)}>{tr('Remove')}</button>
       </div>
       {value.stops.map((s, i) => (
         <div key={i} className="flex items-center gap-1.5">
           <div className="flex-1"><ColorField value={s.color} theme={theme} onChange={(c) => onChange({ ...value, stops: value.stops.map((x, j) => (j === i ? { ...x, color: c ?? '#000000' } : x)) })} /></div>
-          <input type="number" min={0} max={100} className={cx(inputCls, 'h-7 w-16 text-xs')} value={Math.round(s.offset * 100)} onChange={(e) => onChange({ ...value, stops: value.stops.map((x, j) => (j === i ? { ...x, offset: Math.max(0, Math.min(100, Number(e.target.value))) / 100 } : x)) })} title={tr('Position %')} />
+          <NumberInput className="w-20 shrink-0" min={0} max={100} step={5} suffix="%" value={Math.round(s.offset * 100)} onChange={(v) => onChange({ ...value, stops: value.stops.map((x, j) => (j === i ? { ...x, offset: Math.max(0, Math.min(100, v)) / 100 } : x)) })} title={tr('Position %')} />
         </div>
       ))}
     </div>

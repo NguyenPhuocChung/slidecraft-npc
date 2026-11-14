@@ -22,6 +22,7 @@ import { LayoutAssistantPanel } from './LayoutAssistantPanel';
 import { TopBar } from './TopBar';
 import { InsertBar } from './InsertBar';
 import { ChartDataEditor } from './dialogs/ChartDataEditor';
+import { SourceCodeDialog } from './dialogs/SourceCodeDialog';
 import { MediaPicker } from './dialogs/MediaPicker';
 import { SettingsDialog, ShareDialog, VersionsDialog } from './dialogs/EditorDialogs';
 import { ExportDialog } from './dialogs/ExportDialog';
@@ -45,7 +46,7 @@ export default function EditorPage() {
   const [notFound, setNotFound] = useState(false);
   const [chartId, setChartId] = useState<string | null>(null);
   const [imageTarget, setImageTarget] = useState<string | 'new' | null>(null);
-  const [dialog, setDialog] = useState<null | 'export' | 'share' | 'settings' | 'versions'>(null);
+  const [dialog, setDialog] = useState<null | 'export' | 'share' | 'settings' | 'versions' | 'source'>(null);
   const [preview, setPreview] = useState(false);
   const st = useEditor.getState;
 
@@ -96,7 +97,7 @@ export default function EditorPage() {
 
   return (
     <div key={lang} className="flex h-full flex-col overflow-hidden bg-white text-ink-900 dark:bg-ink-900 dark:text-ink-100" data-testid="editor">
-      <TopBar a={{ preview: () => setPreview(true), present, exportOpen: () => setDialog('export'), share: () => setDialog('share'), settings: () => setDialog('settings'), versions: () => setDialog('versions'), quality: () => st().set({ rightTab: 'quality' }) }} />
+      <TopBar a={{ preview: () => setPreview(true), present, exportOpen: () => setDialog('export'), share: () => setDialog('share'), settings: () => setDialog('settings'), versions: () => setDialog('versions'), source: () => setDialog('source'), quality: () => st().set({ rightTab: 'quality' }) }} />
       <InsertBar onPickImage={() => setImageTarget('new')} />
       <div className="flex min-h-0 flex-1">
         {/* Left */}
@@ -149,6 +150,7 @@ export default function EditorPage() {
       }} />
       <SettingsDialog open={dialog === 'settings'} onClose={() => setDialog(null)} />
       <VersionsDialog open={dialog === 'versions'} onClose={() => setDialog(null)} />
+      <SourceCodeDialog open={dialog === 'source'} onClose={() => setDialog(null)} />
       <ShareDialog open={dialog === 'share'} onClose={() => setDialog(null)} />
       {dialog === 'export' && <ExportDialog onClose={() => setDialog(null)} />}
       {preview && <PreviewModal startIndex={Math.max(0, currentIndex)} onClose={() => setPreview(false)} />}

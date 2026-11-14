@@ -7,7 +7,9 @@ import {
   Lock, LockOpen, FlipHorizontal, FlipVertical, Plus, Trash2, Sparkles,
 } from 'lucide-react';
 import type { Paragraph, SlideElement, Style, Theme } from '@/types/schema';
-import { ELEMENT_TYPES, CHART_TYPES, CHART_TYPE_IDS, DECOR_KINDS, DIAGRAM_KINDS, DIAGRAM_KIND_IDS, INFOGRAPHIC_KINDS, INFOGRAPHIC_KIND_IDS, SHAPE_IDS, TIMELINE_STYLES, VISUAL3D_KINDS } from '@/types/registry';
+import { ELEMENT_TYPES, CHART_TYPES, DECOR_KINDS, DIAGRAM_KINDS, INFOGRAPHIC_KINDS, TIMELINE_STYLES, VISUAL3D_KINDS, type ChartType } from '@/types/registry';
+import { ChartTypePicker, DECOR_LABELS, DecorGlyph, DiagramKindPicker, InfographicKindPicker, ShapePicker, TIMELINE_LABELS, TileGrid, VISUAL3D_LABELS, Visual3DGlyph } from '../pickers';
+import { convertContent } from '../dialogs/chartGrid';
 import { useEditor, useSelectedElements } from '@/stores/editor';
 import { presentationTheme } from '@/slides/SlideRenderer';
 import { ICON_NAMES, IconSvg } from '@/media/icons';
@@ -65,8 +67,8 @@ export function PropertiesPanel({ onOpenChartEditor, onReplaceImage }: { onOpenC
         {selected.length === 1 && (
           <>
             <Row cols={4}>
-              <Field label={tr('X')}><NumberInput value={el.x} onChange={(v) => upd((e) => { const dx = v - e.x; e.x = v; if (e.type === 'line' || e.type === 'arrow') { e.content.x1 += dx; e.content.x2 += dx; } }, 'Move')} /></Field>
-              <Field label={tr('Y')}><NumberInput value={el.y} onChange={(v) => upd((e) => { const dy = v - e.y; e.y = v; if (e.type === 'line' || e.type === 'arrow') { e.content.y1 += dy; e.content.y2 += dy; } }, 'Move')} /></Field>
+              <Field label={tr('X')}><NumberInput testId="pos-x" value={el.x} onChange={(v) => upd((e) => { const dx = v - e.x; e.x = v; if (e.type === 'line' || e.type === 'arrow') { e.content.x1 += dx; e.content.x2 += dx; } }, 'Move')} /></Field>
+              <Field label={tr('Y')}><NumberInput testId="pos-y" value={el.y} onChange={(v) => upd((e) => { const dy = v - e.y; e.y = v; if (e.type === 'line' || e.type === 'arrow') { e.content.y1 += dy; e.content.y2 += dy; } }, 'Move')} /></Field>
               <Field label={tr('W')}><NumberInput value={el.width} min={1} onChange={(v) => upd((e) => { e.width = v; }, 'Resize')} /></Field>
               <Field label={tr('H')}><NumberInput value={el.height} min={1} onChange={(v) => upd((e) => { e.height = v; }, 'Resize')} /></Field>
             </Row>
@@ -82,7 +84,7 @@ export function PropertiesPanel({ onOpenChartEditor, onReplaceImage }: { onOpenC
       {same && el.type === 'image' && selected.length === 1 && <ImageProps el={el} upd={upd} theme={theme} onReplace={() => onReplaceImage(el.id)} />}
       {same && el.type === 'shape' && <ShapeProps el={el} upd={upd} theme={theme} />}
       {same && (el.type === 'line' || el.type === 'arrow') && <LineProps el={el} upd={upd} theme={theme} />}
-      {same && el.type === 'chart' && selected.length === 1 && <ChartProps el={el} upd={upd} theme={theme} onEdit={() => onOpenChartEditor(el.id)} />}
+      {same && el.type === 'chart' && selected.length === 1 && <ChartProps key={el.id} el={el} upd={upd} theme={theme} onEdit={() => onOpenChartEditor(el.id)} />}
       {same && el.type === 'table' && selected.length === 1 && <TableProps el={el} upd={upd} theme={theme} />}
       {same && ['diagram', 'smartart', 'timeline', 'infographic'].includes(el.type) && selected.length === 1 && <CompositeProps el={el} upd={upd} />}
       {same && el.type === 'formula' && <FormulaProps el={el} upd={upd} theme={theme} />}
@@ -162,6 +164,11 @@ function TextProps({ selected, upd, theme }: { selected: SlideElement[]; upd: Up
 function ImageProps({ el, upd, theme, onReplace }: { el: SlideElement; upd: Upd; theme: Theme; onReplace: () => void }) {
   const s = el.style ?? {};
   const crop = s.crop ?? { x: 0, y: 0, width: 1, height: 1 };
+  const setCrop = (k: 'x' | 'y' | 'width' | 'height', v: number) => {
+    const c = { ...crop, [k]: v };
+    c.width = Math.max(0.1, Math.min(c.width, 1 - c.x)); c.height = Math.max(0.1, Math.min(c.height, 1 - c.y));
+    setStyle(upd, { crop: c }, 'Crop');
+  };
   const [cropOpen, setCropOpen] = useState(!!s.crop);
   return (
     <Section title={tr('Image')}>
@@ -177,13 +184,14 @@ function ImageProps({ el, upd, theme, onReplace }: { el: SlideElement; upd: Upd;
       )}
       <Toggle checked={cropOpen} onChange={(v) => { setCropOpen(v); if (!v) setStyle(upd, { crop: undefined }, 'Remove crop'); }} label={tr('Crop')} />
       {cropOpen && (
-        <Row cols={2}>
+        <Row cols={1}>
           {(['x', 'y', 'width', 'height'] as const).map((k) => (
-            <Field key={k} label={`${tr('Crop')} ${tr(k)}`}><input type="range" min={k === 'width' || k === 'height' ? 0.1 : 0} max={1} step={0.01} value={crop[k]} className="w-full" onChange={(e) => {
-              const c = { ...crop, [k]: Number(e.target.value) };
-              c.width = Math.min(c.width, 1 - c.x); c.height = Math.min(c.height, 1 - c.y);
-              setStyle(upd, { crop: c }, 'Crop');
-            }} /></Field>
+            <Field key={k} label={`${tr('Crop')} ${tr(k)} (%)`}>
+              <div className="flex items-center gap-1.5">
+                <input type="range" min={k === 'width' || k === 'height' ? 0.1 : 0} max={1} step={0.01} value={crop[k]} className="min-w-0 flex-1" onChange={(e) => setCrop(k, Number(e.target.value))} />
+                <NumberInput className="w-[72px] shrink-0" min={k === 'width' || k === 'height' ? 10 : 0} max={100} step={1} value={Math.round(crop[k] * 100)} onChange={(v) => setCrop(k, v / 100)} testId={`crop-${k}`} />
+              </div>
+            </Field>
           ))}
         </Row>
       )}
@@ -211,7 +219,7 @@ function ShapeProps({ el, upd, theme }: { el: SlideElement; upd: Upd; theme: The
   const s = el.style ?? {};
   return (
     <Section title={tr('Shape')}>
-      <Field label={tr('Shape')}><Select value={el.content?.shape ?? 'rect'} options={SHAPE_IDS.map((x) => ({ value: x, label: tr(x) }))} onChange={(v) => upd((e) => { e.content.shape = v; }, 'Shape type')} /></Field>
+      <Field label={tr('Shape')}><ShapePicker value={el.content?.shape ?? 'rect'} onChange={(v) => upd((e) => { e.content.shape = v; }, 'Shape type')} /></Field>
       <Row>
         <Field label={tr('Fill')}><ColorField value={s.fill} allowNone theme={theme} onChange={(c) => setStyle(upd, { fill: c }, 'Fill')} /></Field>
         <Field label={tr('Radius')}><NumberInput value={s.radius ?? 0} min={0} suffix="px" onChange={(v) => setStyle(upd, { radius: v }, 'Radius')} /></Field>
@@ -253,12 +261,15 @@ function ChartProps({ el, upd, theme, onEdit }: { el: SlideElement; upd: Upd; th
   const c = el.content;
   const sug = suggestChartType(c);
   const set = (patch: Record<string, unknown>, label = 'Chart') => upd((e) => { Object.assign(e.content, patch); Object.keys(patch).forEach((k) => { if (patch[k] === undefined) delete e.content[k]; }); }, label);
+  // Switching between families (e.g. column ↔ scatter ↔ histogram) converts the data instead of breaking the chart.
+  const changeType = (v: ChartType) => { const next = convertContent(c, v); upd((e) => { e.content = JSON.parse(JSON.stringify(next)); }, 'Chart type'); };
   return (
     <Section title={tr('Chart')}>
-      <Button size="sm" variant="primary" onClick={onEdit}>{tr('Edit data…')}</Button>
-      <Field label={tr('Chart type')}><Select value={c.chartType} options={CHART_TYPE_IDS.map((t) => ({ value: t, label: tr(CHART_TYPES[t].label) }))} onChange={(v) => set({ chartType: v }, 'Chart type')} /></Field>
+      <Button size="sm" variant="primary" onClick={onEdit} data-testid="chart-edit-data">{tr('Edit data…')}</Button>
+      <Field label={tr('Chart type')}><ChartTypePicker value={c.chartType} onChange={(v) => changeType(v)} testId="props-chart-type" /></Field>
+      <p className="text-[11px] text-ink-400">{tr(CHART_TYPES[c.chartType as keyof typeof CHART_TYPES]?.use ?? '')}</p>
       {sug && sug.type !== c.chartType && (
-        <button className="flex w-full items-start gap-2 rounded-lg border border-brand-200 bg-brand-50 p-2 text-left text-[11px] text-brand-800 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200" onClick={() => set({ chartType: sug.type }, 'Chart type')}>
+        <button className="flex w-full items-start gap-2 rounded-lg border border-brand-200 bg-brand-50 p-2 text-left text-[11px] text-brand-800 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200" onClick={() => changeType(sug.type)}>
           <Sparkles size={13} className="mt-0.5 shrink-0" /><span><b>{tr('Suggested')}: {tr(CHART_TYPES[sug.type].label)}</b> — {tr(sug.reason)}</span>
         </button>
       )}
@@ -332,13 +343,13 @@ function CompositeProps({ el, upd }: { el: SlideElement; upd: Upd }) {
   return (
     <Section title={isTimeline ? tr('Timeline') : isInfo ? tr('Infographic') : tr('Diagram')}>
       {!isTimeline && (
-        <Field label={tr('Kind')}><Select value={c.kind} options={(isInfo ? INFOGRAPHIC_KIND_IDS : DIAGRAM_KIND_IDS).map((k) => ({ value: k, label: tr(k) }))} onChange={(v) => upd((e) => { e.content.kind = v; }, 'Diagram kind')} /></Field>
+        <Field label={tr('Kind')}>{isInfo ? <InfographicKindPicker value={c.kind} onChange={(v) => upd((e) => { e.content.kind = v; }, 'Diagram kind')} /> : <DiagramKindPicker value={c.kind} onChange={(v) => upd((e) => { e.content.kind = v; }, 'Diagram kind')} />}</Field>
       )}
       {!isTimeline && <p className="text-[11px] text-ink-400">{tr(isInfo ? INFOGRAPHIC_KINDS[c.kind as keyof typeof INFOGRAPHIC_KINDS] : DIAGRAM_KINDS[c.kind as keyof typeof DIAGRAM_KINDS])}</p>}
       {isTimeline && (
         <Row>
           <Field label={tr('Orientation')}><Select value={c.orientation ?? 'horizontal'} options={[{ value: 'horizontal', label: tr('Horizontal') }, { value: 'vertical', label: tr('Vertical') }]} onChange={(v) => upd((e) => { e.content.orientation = v; }, 'Timeline')} /></Field>
-          <Field label={tr('Style')}><Select value={c.style ?? 'milestones'} options={TIMELINE_STYLES.map((s) => ({ value: s, label: tr(s) }))} onChange={(v) => upd((e) => { e.content.style = v; }, 'Timeline')} /></Field>
+          <Field label={tr('Style')}><Select value={c.style ?? 'milestones'} options={TIMELINE_STYLES.map((s) => ({ value: s, label: tr(TIMELINE_LABELS[s] ?? s) }))} onChange={(v) => upd((e) => { e.content.style = v; }, 'Timeline')} /></Field>
         </Row>
       )}
       {['cycle', 'hub', 'mindmap', 'orgchart', 'hierarchy'].includes(c.kind) && <Field label={tr('Center label')}><input className={inputCls} defaultValue={c.center ?? ''} onBlur={(e) => upd((x) => { x.content.center = e.target.value || undefined; }, 'Center label')} /></Field>}
@@ -438,7 +449,7 @@ function DecorProps({ el, upd }: { el: SlideElement; upd: Upd }) {
   const kinds = el.type === 'decorative' ? DECOR_KINDS : VISUAL3D_KINDS;
   return (
     <Section title={el.type === 'decorative' ? tr('Decoration') : tr('3D visual')}>
-      <Field label={tr('Kind')}><Select value={el.content?.kind} options={kinds.map((k) => ({ value: k, label: tr(k) }))} onChange={(v) => upd((x) => { x.content.kind = v; }, 'Kind')} /></Field>
+      <Field label={tr('Kind')}><TileGrid cols={3} value={el.content?.kind} testPrefix="pick-kind" items={kinds.map((k) => ({ id: k, label: (el.type === 'decorative' ? DECOR_LABELS : VISUAL3D_LABELS)[k] ?? k, glyph: el.type === 'decorative' ? <DecorGlyph kind={k} /> : <Visual3DGlyph kind={k} /> }))} onPick={(v) => upd((x) => { x.content.kind = v; }, 'Kind')} /></Field>
       <Field label={tr('Colors (comma separated, tokens allowed)')}><input className={inputCls} defaultValue={(el.content?.colors ?? []).join(', ')} onBlur={(e) => upd((x) => { x.content.colors = e.target.value.split(',').map((s) => s.trim()).filter(Boolean); }, 'Colors')} /></Field>
       {el.type === 'visual3d' && <Field label={tr('Labels (comma separated)')}><input className={inputCls} defaultValue={(el.content?.items ?? []).join(', ')} onBlur={(e) => upd((x) => { x.content.items = e.target.value.split(',').map((s) => s.trim()).filter(Boolean); }, 'Labels')} /></Field>}
     </Section>

@@ -87,10 +87,15 @@ export function textWidth(text: string, fontSize: number, fontFamily = 'Inter', 
   const c = getCtx();
   if (c) {
     c.font = `${weight} ${fontSize}px "${fontFamily}", Inter, Arial, sans-serif`;
-    return c.measureText(text).width;
+    const w = c.measureText(text).width;
+    // Web font not loaded yet → the canvas measured a fallback font; leave headroom so text does not overflow later.
+    let loaded = true;
+    try { loaded = typeof document === 'undefined' || !document.fonts || document.fonts.check(`${weight} ${fontSize}px "${fontFamily}"`); } catch { loaded = true; }
+    return loaded ? w : w * 1.12;
   }
   // Node fallback: average glyph width heuristic
-  const factor = WIDE_FONTS.test(fontFamily) ? 0.42 : Number(weight) >= 700 ? 0.56 : 0.52;
+  const serif = /playfair|serif|lora|georgia|times|slab/i.test(fontFamily) ? 0.05 : 0;
+  const factor = (WIDE_FONTS.test(fontFamily) ? 0.42 : Number(weight) >= 700 ? 0.56 : 0.52) + serif;
   let w = 0;
   for (const ch of text) w += /[A-Z0-9MW@%]/.test(ch) ? fontSize * (factor + 0.1) : ch === ' ' ? fontSize * 0.28 : /[il.,'|!:;]/.test(ch) ? fontSize * 0.26 : fontSize * factor;
   return w;

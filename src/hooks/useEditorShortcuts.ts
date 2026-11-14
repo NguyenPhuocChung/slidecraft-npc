@@ -31,7 +31,7 @@ export function useEditorShortcuts(handlers: { present: () => void; save: () => 
         if (st.selectedIds.length) { e.preventDefault(); st.deleteElements(); }
         return;
       }
-      if (e.key === 'Escape') { st.select([]); return; }
+      if (e.key === 'Escape') { if (!document.querySelector('[role=dialog], [data-popover]')) st.select([]); return; }
       if (e.key === 'Enter' && st.selectedIds.length === 1) {
         const el = st.currentSlide()?.elements.find((x) => x.id === st.selectedIds[0]);
         if (el && ['text', 'heading', 'paragraph', 'richText', 'shape'].includes(el.type) && el.content?.paragraphs && !el.locked) { e.preventDefault(); st.set({ editingId: el.id }); }

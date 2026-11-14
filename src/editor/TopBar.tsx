@@ -1,13 +1,13 @@
 import { isDesktop } from '@/desktop';
 import { Link } from 'react-router-dom';
 import { tr } from '@/i18n';
-import { Undo2, Redo2, ZoomIn, ZoomOut, Palette, Sparkles, Eye, Play, Download, Share2, Settings, Cloud, CloudOff, Check, Loader2, AlertTriangle, History, ShieldCheck, ChevronDown, Moon, Sun } from 'lucide-react';
+import { Undo2, Redo2, ZoomIn, ZoomOut, Palette, Sparkles, Eye, Play, Download, Share2, Settings, Cloud, CloudOff, Check, Loader2, AlertTriangle, History, ShieldCheck, ChevronDown, Moon, Sun, Code2 } from 'lucide-react';
 import { useEditor } from '@/stores/editor';
 import { useUiTheme } from '@/hooks/useUiTheme';
 import { Button, IconButton, MenuButton, Popover, cx } from '@/components/ui';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 
-export interface TopBarActions { preview: () => void; present: (mode?: string) => void; exportOpen: () => void; share: () => void; settings: () => void; versions: () => void; quality: () => void }
+export interface TopBarActions { preview: () => void; present: (mode?: string) => void; exportOpen: () => void; share: () => void; settings: () => void; versions: () => void; quality: () => void; source?: () => void }
 
 function SaveStatus() {
   const s = useEditor((x) => x.saveStatus);
@@ -54,6 +54,7 @@ export function TopBar({ a }: { a: TopBarActions }) {
       <Button variant="ghost" size="sm" icon={<Palette size={14} />} onClick={() => st().set({ leftTab: 'themes' })}>{tr('Theme')}</Button>
       <Button variant="ghost" size="sm" icon={<Sparkles size={14} />} onClick={() => st().set({ rightTab: 'animate', timelineOpen: true })} data-testid="topbar-animation">{tr('Animation')}</Button>
       <IconButton title={tr('Quality check')} onClick={a.quality}><ShieldCheck size={16} /></IconButton>
+      {a.source && <Button variant="ghost" size="sm" icon={<Code2 size={14} />} onClick={a.source} title={tr('Edit source code — fix code you pasted by mistake, or paste new code')} data-testid="topbar-source"><span className="hidden xl:inline">{tr('Edit code')}</span></Button>}
       <IconButton title={tr('Version history')} onClick={a.versions}><History size={16} /></IconButton>
       <IconButton title={ui.mode === 'dark' ? tr('Light mode') : tr('Dark mode')} onClick={ui.toggle}>{ui.mode === 'dark' ? <Sun size={16} /> : <Moon size={16} />}</IconButton>
       <LanguageSwitch compact />

@@ -5,7 +5,7 @@ import { json } from '@codemirror/lang-json';
 import { javascript } from '@codemirror/lang-javascript';
 import { html } from '@codemirror/lang-html';
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
-import { AlertCircle, AlertTriangle, BookOpen, CheckCircle2, ClipboardPaste, Eraser, Eye, FileUp, Hammer, Info, Layers, Loader2, Play, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BookOpen, CheckCircle2, ClipboardPaste, Eraser, Eye, FileUp, Hammer, Info, Layers, Loader2, Play, Presentation as PresentationIcon, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
 import type { Presentation } from '@/types/schema';
 import { analyzeCode, normalizePresentation, type Analysis, type Issue, type SourceFormat } from '@/code-parser';
 import { AppHeader } from '@/components/AppHeader';
@@ -19,6 +19,8 @@ import { loadFonts } from '@/hooks/useFonts';
 import { getTheme } from '@/themes/themes';
 import { EXAMPLES } from './examples';
 import { tr, trMsg, useT } from '@/i18n';
+import { isPptxFile, PPTX_ACCEPT, readPptx, savePptxImport, trPptx, type PptxImportOutcome } from '@/services/pptxImport';
+import { PptxPanel, PptxProgress } from './PptxPanel';
 
 const AUTOSAVE_KEY = 'slidecraft.importEditor';
 const FORMATS: { value: SourceFormat | 'auto'; label: string }[] = [
@@ -38,6 +40,11 @@ export default function ImportPage() {
   const ui = useUiTheme((s) => s.mode);
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pptxRef = useRef<HTMLInputElement>(null);
+  // PowerPoint import has its own result state: it never touches the code editor
+  const [pptxResult, setPptxResult] = useState<PptxImportOutcome | null>(null);
+  const [pptxBusy, setPptxBusy] = useState<{ name: string; progress: number; label: string } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [code, setCode] = useState<string>(() => {
     const draft = sessionStorage.getItem('slidecraft.importDraft');
     if (draft) return draft; // removed in an effect (StrictMode runs initializers twice)
@@ -119,7 +126,33 @@ export default function ImportPage() {
     try { const t = await navigator.clipboard.readText(); if (!t.trim()) return toast.info(tr('Clipboard is empty')); setCode(t); toast.success(tr('Pasted from clipboard')); }
     catch { toast.error(tr('Clipboard access was blocked — press Ctrl+V inside the editor instead.')); }
   };
+  const openPptx = async (f: File) => {
+    const name = f.name;
+    setPptxResult(null);
+    setPptxBusy({ name, progress: 0, label: '' });
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const out = await readPptx(bytes, name, (progress, label) => setPptxBusy({ name, progress, label }));
+      setPptxResult(out);
+      if (out.report.warnings.length) toast.warning(tr('Imported with {n} warnings — see the import report.', { n: out.report.warnings.length }));
+    } catch (e) {
+      toast.error(tr('PowerPoint import failed: {msg}', { msg: trPptx((e as Error).message) }));
+    } finally { setPptxBusy(null); }
+  };
+  const buildPptx = async () => {
+    if (!pptxResult) return;
+    setBuilding(true);
+    try {
+      const saved = await savePptxImport(pptxResult);
+      toast.success(tr('Imported “{title}” — {n} slides', { title: saved.title, n: saved.slides.length }));
+      nav(`/editor/${saved.id}`);
+    } catch (e) {
+      toast.error(tr('Build failed: {msg}', { msg: (e as Error).message }));
+    } finally { setBuilding(false); }
+  };
   const openFile = async (f: File) => {
+    if (isPptxFile(f)) return openPptx(f);
+    if (/\.ppt$/i.test(f.name)) return toast.error(trPptx('Not a PowerPoint .pptx file (ppt/presentation.xml is missing). Old .ppt files must first be saved as .pptx in PowerPoint.'));
     if (f.size > 8e6) return toast.error(tr('File is larger than 8 MB'));
     const t = await f.text();
     const ext = f.name.split('.').pop()?.toLowerCase();
@@ -173,13 +206,22 @@ export default function ImportPage() {
   const partIncomplete = totalParts > 1 && loadedParts < totalParts;
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-ink-950">
+    <div
+      className={cx('relative flex h-full flex-col bg-white dark:bg-ink-950', dragOver && 'ring-2 ring-inset ring-brand-500')}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragOver(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+      onDrop={(e) => { const f = e.dataTransfer.files[0]; setDragOver(false); if (!f) return; e.preventDefault(); void openFile(f); }}
+      data-testid="import-page"
+    >
       <AppHeader />
+      {dragOver && <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-brand-500/10 text-lg font-semibold text-brand-700 dark:text-brand-200">{t('Drop a .pptx file to edit it')}</div>}
       <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 px-4 py-2 dark:border-ink-800">
         <h1 className="mr-2 text-[15px] font-semibold text-ink-900 dark:text-white">{t('Code Import Studio')}</h1>
         <Button size="sm" icon={<ClipboardPaste size={14} />} onClick={() => void paste()} data-testid="paste-code">{t('Paste')}</Button>
         <Button size="sm" icon={<FileUp size={14} />} onClick={() => fileRef.current?.click()}>{t('Import file')}</Button>
-        <input ref={fileRef} hidden type="file" accept=".json,.js,.ts,.tsx,.jsx,.html,.htm,.md,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = ''; }} data-testid="import-file" />
+        <input ref={fileRef} hidden type="file" accept=".json,.js,.ts,.tsx,.jsx,.html,.htm,.md,.txt,.pptx" onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = ''; }} data-testid="import-file" />
+        <Button size="sm" icon={<PresentationIcon size={14} />} onClick={() => pptxRef.current?.click()} title={t('Open a PowerPoint file (.pptx) and edit it here')} data-testid="open-pptx">{t('Open PowerPoint (.pptx)')}</Button>
+        <input ref={pptxRef} hidden type="file" accept={PPTX_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; if (f) void openPptx(f); e.target.value = ''; }} data-testid="import-pptx" />
         <select className={cx(inputCls, 'h-7 !w-40 text-xs')} value={format} onChange={(e) => { setFormat(e.target.value as SourceFormat | 'auto'); }} data-testid="format-select">
           {FORMATS.map((f) => <option key={f.value} value={f.value}>{t(f.label)}</option>)}
         </select>
@@ -197,6 +239,7 @@ export default function ImportPage() {
           <Button variant="primary" icon={building ? <Loader2 size={14} className="animate-spin" /> : <Hammer size={14} />} disabled={!report?.ok || building || partIncomplete} onClick={() => void build()} data-testid="build-presentation" title={partIncomplete ? t('Paste all parts first') : undefined}>{t('Build presentation')}</Button>
         </div>
       </div>
+      {pptxBusy ? <PptxProgress fileName={pptxBusy.name} progress={pptxBusy.progress} label={pptxBusy.label} /> : pptxResult ? <PptxPanel outcome={pptxResult} building={building} onBuild={() => void buildPptx()} onCancel={() => setPptxResult(null)} /> : (
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">
         <div className="flex min-h-[320px] flex-col border-r border-ink-100 dark:border-ink-800">
           {(parts.length > 0 || totalParts > 1) && (
@@ -270,6 +313,7 @@ export default function ImportPage() {
           </div>
         </div>
       </div>
+      )}
       <Modal open={!!fixPreview} onClose={() => setFixPreview(null)} title={t('Apply safe auto fixes?')} width={640} footer={<><Button variant="ghost" onClick={() => setFixPreview(null)}>{t('Cancel')}</Button><Button variant="primary" onClick={applyFix} data-testid="apply-fixes">{t('Apply {n} fixes', { n: fixPreview?.fixes.length ?? 0 })}</Button></>}>
         <p className="mb-3 text-sm text-ink-600 dark:text-ink-300">{t('The editor content will be replaced by normalized JSON with these changes. No text, data or images are removed.')}</p>
         <ul className="max-h-80 space-y-1 overflow-y-auto text-[13px]">{fixPreview?.fixes.map((f, i) => <li key={i} className="flex gap-2"><Wand2 size={13} className="mt-0.5 shrink-0 text-brand-500" />{trMsg(f)}</li>)}</ul>

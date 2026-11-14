@@ -11,6 +11,7 @@ import { library } from '@/media/library';
 import { THEME_MAP } from '@/themes/themes';
 import { NewPresentationDialog } from './components/NewPresentationDialog';
 import { tr, trMsg, useT } from '@/i18n';
+import { importPptxAsProject, isPptxFile, trPptx } from '@/services/pptxImport';
 import { ProjectThumb, copyText, download, relativeTime, slug, useWidth } from './components/helpers';
 
 type Filter = 'recent' | 'draft' | 'exported' | 'shared' | 'archived' | 'starred';
@@ -59,6 +60,16 @@ export default function DashboardPage() {
     download(JSON.stringify(doc, null, 2), `${slug(p.title)}.slidecraft.json`, 'application/json');
   };
   const importFile = async (f: File) => {
+    if (isPptxFile(f)) {
+      toast.info(tr('Importing {name}…', { name: f.name }));
+      try {
+        const { saved, report } = await importPptxAsProject(new Uint8Array(await f.arrayBuffer()), f.name);
+        toast.success(tr('Imported “{title}” — {n} slides', { title: saved.title, n: saved.slides.length }));
+        if (report.warnings.length) toast.warning(tr('Imported with {n} warnings — see the import report.', { n: report.warnings.length }) + ' ' + report.warnings.slice(0, 2).map(trPptx).join(' · '));
+        nav(`/editor/${saved.id}`);
+      } catch (e) { toast.error(tr('PowerPoint import failed: {msg}', { msg: trPptx((e as Error).message) })); }
+      return;
+    }
     if (f.size > 8e6) return toast.error(tr('File is larger than 8 MB'));
     const text = await f.text();
     sessionStorage.setItem('slidecraft.importDraft', text);
@@ -77,11 +88,11 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-ink-900 dark:text-white">{t('Dashboard')}</h1>
-            <p className="text-sm text-ink-500">{user ? t('{n} presentations · saved locally and synced to your cloud account. Drop a .json file anywhere to import.', { n: counts.recent }) : t('{n} presentations · saved locally. Drop a .json file anywhere to import.', { n: counts.recent })}</p>
+            <p className="text-sm text-ink-500">{user ? t('{n} presentations · saved locally and synced to your cloud account. Drop a .json or .pptx file anywhere to import.', { n: counts.recent }) : t('{n} presentations · saved locally. Drop a .json or .pptx file anywhere to import.', { n: counts.recent })}</p>
           </div>
           <div className="flex gap-2">
             <Button icon={<FileUp size={14} />} onClick={() => fileRef.current?.click()}>{t('Import file')}</Button>
-            <input ref={fileRef} hidden type="file" accept=".json,.js,.ts,.tsx,.jsx,.html,.md,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
+            <input ref={fileRef} hidden type="file" accept=".json,.js,.ts,.tsx,.jsx,.html,.md,.txt,.pptx" data-testid="dashboard-import-file" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
             <Button variant="primary" icon={<Plus size={14} />} onClick={() => setNewOpen(true)} data-testid="dashboard-new">{t('New presentation')}</Button>
           </div>
         </div>

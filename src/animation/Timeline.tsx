@@ -7,6 +7,7 @@ import { ANIMATION_EFFECTS } from '@/types/registry';
 import { IconButton, cx } from '@/components/ui';
 import { buildTimeline, orderedAnimations } from './engine';
 import { canvasPreview } from './preview';
+import { TRIGGER_LABEL } from './labels';
 
 const CAT_COLOR: Record<string, string> = { entrance: 'bg-emerald-500', emphasis: 'bg-amber-500', exit: 'bg-rose-500', motion: 'bg-sky-500' };
 
@@ -98,9 +99,9 @@ export function AnimationTimeline() {
                   <span className="min-w-0 flex-1 truncate">{label(r.elId)}</span>
                   <span className="text-[10px] text-ink-400">{tr((ANIMATION_EFFECTS as Record<string, { label: string }>)[r.anim.effect]?.label ?? '')}</span>
                 </div>
-                <div className={cx('absolute flex h-4 cursor-grab items-center rounded px-1 text-[9px] font-medium text-white shadow-sm', CAT_COLOR[r.category])} style={{ left, width }} title={`${r.anim.trigger} · delay ${r.anim.delay ?? 0}ms · ${r.anim.duration ?? 600}ms`}
+                <div className={cx('absolute flex h-4 cursor-grab items-center rounded px-1 text-[9px] font-medium text-white shadow-sm', CAT_COLOR[r.category])} style={{ left, width }} title={tr('{start} · wait {delay}s · lasts {dur}s', { start: tr(TRIGGER_LABEL[r.anim.trigger ?? 'onClick'] ?? ''), delay: ((r.anim.delay ?? 0) / 1000).toFixed(1), dur: ((r.anim.duration ?? 600) / 1000).toFixed(1) })}
                   onPointerDown={(e) => { e.preventDefault(); (e.target as HTMLElement).setPointerCapture?.(e.pointerId); st().beginTransient(); drag.current = { kind: 'move', elId: r.elId, idx, x0: e.clientX, v0: r.anim.delay ?? 0 }; }}>
-                  <span className="truncate">{r.anim.trigger === 'withPrevious' ? tr('with') : r.anim.trigger === 'afterPrevious' ? tr('after') : r.anim.trigger === 'onEnter' ? tr('enter') : r.anim.trigger === 'onClick' ? tr('click') : ''}</span>
+                  <span className="truncate"><span title={tr(TRIGGER_LABEL[r.anim.trigger ?? 'onClick'] ?? '')}>{tr(TRIGGER_LABEL[r.anim.trigger ?? 'onClick'] ?? '')}</span></span>
                   <span className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r bg-black/20" onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); st().beginTransient(); drag.current = { kind: 'resize', elId: r.elId, idx, x0: e.clientX, v0: r.anim.duration ?? 600 }; }} />
                 </div>
               </div>

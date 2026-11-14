@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PAGES } from '@/i18n/vi/pages';
 import { COMMON } from '@/i18n/vi/common';
+import { PPTXIMPORT } from '@/i18n/vi/pptximport';
 import { LAYOUTS } from '@/layouts/engine';
 import { THEMES } from '@/themes/themes';
 import { ANIMATION_EFFECTS, ANIMATION_TRIGGERS, ASPECT_RATIOS, CHART_TYPES, DIAGRAM_KINDS, ELEMENT_TYPES, INFOGRAPHIC_KINDS, TRANSITIONS } from '@/types/registry';
@@ -31,7 +32,7 @@ function keysIn(src: string): string[] {
 }
 
 describe('i18n — app pages', () => {
-  const vi = { ...COMMON, ...PAGES };
+  const vi = { ...COMMON, ...PAGES, ...PPTXIMPORT };
   it.each(FILES)('%s: every literal key has a Vietnamese translation', (f) => {
     const missing = keysIn(fs.readFileSync(f, 'utf8')).filter((k) => !(k in vi) && !registryLabels.has(k));
     expect(missing).toEqual([]);

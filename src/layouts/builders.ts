@@ -1,5 +1,6 @@
 import type { ImageRef, LayoutContent, Paragraph, SlideElement, Style, Theme } from '@/types/schema';
 import { measureParagraphs, parseMarkdownLite } from '@/utils/richtext';
+import { resolveFont } from '@/themes/themes';
 
 export interface LayoutCtx {
   W: number;
@@ -13,7 +14,11 @@ export interface LayoutCtx {
   z: number;
 }
 
+/** Theme of the layout being built — lets measure() resolve "$heading" / "$body" to the real font. */
+let measureTheme: Theme | null = null;
+
 export function makeCtx(content: LayoutContent, theme: Theme, size: { width: number; height: number }): LayoutCtx {
+  measureTheme = theme;
   const W = size.width, H = size.height;
   const scale = Math.min(W / 1920, H / 1080) || 1;
   return { W, H, M: Math.round(theme.spacing.margin * Math.max(0.7, scale)), G: Math.round(theme.grid.gutter * Math.max(0.8, scale)), theme, portrait: H > W, c: content, els: [], z: 1 };
@@ -50,7 +55,8 @@ export function measure(text: string | Paragraph[], width: number, style: Style)
   const tr = style.textTransform === 'uppercase';
   const ps2 = tr ? ps.map((p) => ({ ...p, runs: p.runs.map((r) => ({ ...r, text: r.text.toUpperCase() })) })) : ps;
   const { height } = measureParagraphs(ps2, width, {
-    fontSize: style.fontSize ?? 30, fontFamily: style.fontFamily?.startsWith('$') ? undefined : style.fontFamily,
+    fontSize: style.fontSize ?? 30,
+    fontFamily: style.fontFamily?.startsWith('$') ? (measureTheme ? resolveFont(style.fontFamily, measureTheme) : undefined) : style.fontFamily,
     fontWeight: style.fontWeight, lineHeight: style.lineHeight ?? 1.3, paragraphSpacing: style.paragraphSpacing, letterSpacing: style.letterSpacing,
     padding: typeof style.padding === 'number' ? style.padding : 0,
   });

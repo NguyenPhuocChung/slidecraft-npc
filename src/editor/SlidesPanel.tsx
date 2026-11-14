@@ -4,6 +4,7 @@ import { Copy, Eye, EyeOff, Plus, Search, Star, Trash2, ArrowUpDown, FolderPlus 
 import type { Presentation, Slide } from '@/types/schema';
 import { SlideRenderer } from '@/slides/SlideRenderer';
 import { useEditor } from '@/stores/editor';
+import { TRANSITIONS } from '@/types/registry';
 import { paragraphsToPlain } from '@/utils/richtext';
 import { ContextMenu, type MenuItem } from '@/components/ContextMenu';
 import { IconButton, cx, inputCls } from '@/components/ui';
@@ -109,7 +110,7 @@ export function SlidesPanel() {
                   <div className="absolute right-1 top-1 flex gap-0.5">
                     {s.starred && <span className="rounded bg-amber-400 p-0.5 text-white"><Star size={10} fill="currentColor" /></span>}
                     {s.hidden && <span className="rounded bg-ink-700 p-0.5 text-white"><EyeOff size={10} /></span>}
-                    {s.transition && s.transition.type !== 'none' && <span className="rounded bg-black/55 px-1 text-[9px] font-medium leading-[14px] text-white">{s.transition.type}</span>}
+                    {s.transition && s.transition.type !== 'none' && <span className="rounded bg-black/55 px-1 text-[9px] font-medium leading-[14px] text-white">{tr((TRANSITIONS as Record<string, { label: string }>)[s.transition.type]?.label ?? s.transition.type)}</span>}
                   </div>
                   <div className="absolute bottom-1 right-1 hidden gap-0.5 group-hover:flex">
                     <button title={tr('Duplicate')} className="rounded bg-white/90 p-1 text-ink-700 shadow hover:bg-white" onClick={(e) => { e.stopPropagation(); st().duplicateSlides([s.id]); }}><Copy size={11} /></button>

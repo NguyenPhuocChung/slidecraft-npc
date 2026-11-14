@@ -78,11 +78,20 @@ async function openCodeFile() {
   send('desktop:open-code', text, path.basename(r.filePaths[0]));
 }
 
+async function openPptxFile() {
+  const r = await dialog.showOpenDialog({ title: L('Mở file PowerPoint', 'Open PowerPoint file'), properties: ['openFile'], filters: [{ name: 'PowerPoint', extensions: ['pptx', 'ppsx', 'potx'] }] });
+  if (r.canceled || !r.filePaths[0]) return;
+  const file = r.filePaths[0];
+  if (fs.statSync(file).size > 200 * 1024 * 1024) { void dialog.showMessageBox({ type: 'warning', message: L('File lớn hơn 200 MB.', 'The file is larger than 200 MB.') }); return; }
+  send('desktop:open-pptx', new Uint8Array(fs.readFileSync(file)), path.basename(file));
+}
+
 function buildMenu() {
   const template: MenuItemConstructorOptions[] = [
     { label: L('Tệp', 'File'), submenu: [
       { label: L('Bài thuyết trình mới', 'New presentation'), accelerator: 'CmdOrCtrl+N', click: () => nav('/?new=1') },
       { label: L('Mở file code…', 'Open code file…'), accelerator: 'CmdOrCtrl+O', click: () => void openCodeFile() },
+      { label: L('Mở file PowerPoint…', 'Open PowerPoint file…'), accelerator: 'CmdOrCtrl+Shift+O', click: () => void openPptxFile() },
       { label: L('Nhập code từ AI', 'Import AI code'), accelerator: 'CmdOrCtrl+I', click: () => nav('/import') },
       { type: 'separator' },
       { label: L('Bảng điều khiển', 'Dashboard'), click: () => nav('/dashboard') },
@@ -115,10 +124,12 @@ function isAppUrl(u: string) { return u.startsWith(`http://127.0.0.1:${port}/`);
 function createWindow(url = `http://127.0.0.1:${port}/`, opts: Electron.BrowserWindowConstructorOptions = {}) {
   const win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1024, minHeight: 640, show: false, backgroundColor: '#0c0c14', title: 'SlideCraft AI Studio',
+    autoHideMenuBar: true, // menu bar hidden; press Alt to show it (shortcuts keep working)
     icon: path.join(HERE, 'icon.png'),
     webPreferences: { preload: path.join(HERE, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
     ...opts,
   });
+  win.setMenuBarVisibility(false);
   win.once('ready-to-show', () => win.show());
   win.webContents.setWindowOpenHandler(({ url: u }) => {
     if (isAppUrl(u)) return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 800, autoHideMenuBar: true, webPreferences: { preload: path.join(HERE, 'preload.cjs'), contextIsolation: true, sandbox: true } } };

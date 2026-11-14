@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld('slidecraftDesktop', {
   openDataFolder: (): Promise<string> => ipcRenderer.invoke('desktop:open-data-folder'),
   onNavigate: (cb: (path: string) => void) => { ipcRenderer.on('desktop:navigate', (_e, p: string) => cb(p)); },
   onOpenCode: (cb: (text: string, name: string) => void) => { ipcRenderer.on('desktop:open-code', (_e, t: string, n: string) => cb(t, n)); },
+  onOpenPptx: (cb: (bytes: Uint8Array, name: string) => void) => { ipcRenderer.on('desktop:open-pptx', (_e, b: Uint8Array, n: string) => cb(b, n)); },
 });

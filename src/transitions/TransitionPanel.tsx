@@ -7,6 +7,7 @@ import { useEditor } from '@/stores/editor';
 import { Badge, Button, Field, NumberInput, Section, Select, Toggle, cx, toast } from '@/components/ui';
 import { morphPairs } from './engine';
 import { PreviewModal } from '@/presentation/PreviewModal';
+import { EASING_LABEL, SOUND_LABEL, TRANSITION_HELP, directionLabel, supportLabel } from '@/animation/labels';
 
 const PRESETS: { id: string; name: string; t: Transition }[] = [
   { id: 'smooth', name: 'Smooth fade', t: { type: 'fade', duration: 500 } },
@@ -35,24 +36,25 @@ export function TransitionPanel() {
       <Section title={tr('Transition into slide {n}', { n: idx + 1 })}>
         <div className="grid grid-cols-3 gap-1">
           {TRANSITION_IDS.map((id) => (
-            <button key={id} onClick={() => set({ type: id, duration: id === 'morph' ? 1000 : t.duration || 700 })} className={cx('rounded-lg border px-1.5 py-2 text-[11px] font-medium transition', t.type === id ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' : 'border-ink-200 hover:border-ink-300 dark:border-ink-700')} data-testid={`transition-${id}`}>
+            <button key={id} title={tr(TRANSITION_HELP[id] ?? '')} onClick={() => set({ type: id, duration: id === 'morph' ? 1000 : t.duration || 700 })} className={cx('rounded-lg border px-1.5 py-2 text-[11px] font-medium transition', t.type === id ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' : 'border-ink-200 hover:border-ink-300 dark:border-ink-700')} data-testid={`transition-${id}`}>
               {tr(TRANSITIONS[id].label)}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1.5"><Badge tone={info.pptx === 'supported' ? 'green' : info.pptx === 'partial' ? 'amber' : 'red'}>PowerPoint: {tr(info.pptx)}</Badge><span className="text-[11px] text-ink-400">{tr(info.pptxNote)}</span></div>
+        {TRANSITION_HELP[t.type] && <p className="text-[11.5px] leading-snug text-ink-600 dark:text-ink-300" data-testid="transition-help"><b>{tr(info.label)}:</b> {tr(TRANSITION_HELP[t.type])}</p>}
+        <div className="flex items-center gap-1.5"><Badge tone={info.pptx === 'supported' ? 'green' : info.pptx === 'partial' ? 'amber' : 'red'}>{tr(supportLabel(info.pptx))}</Badge>{t.type !== 'none' && info.pptx !== 'supported' && <span className="text-[11px] text-ink-400">{tr(info.pptxNote)}</span>}</div>
         {t.type !== 'none' && (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <Field label={tr('Duration')}><NumberInput value={t.duration ?? 700} min={100} max={10000} step={100} suffix="ms" onChange={(v) => set({ duration: v })} /></Field>
+              <Field label={tr('Duration (seconds)')}><NumberInput value={(t.duration ?? 700) / 1000} min={0.1} max={10} step={0.1} suffix="s" onChange={(v) => set({ duration: Math.round(v * 1000) })} testId="transition-duration" /></Field>
               <Field label={tr('Speed')}><Select value={(t.duration ?? 700) <= 500 ? 'fast' : (t.duration ?? 700) <= 1000 ? 'medium' : 'slow'} options={[{ value: 'fast', label: tr('Fast') }, { value: 'medium', label: tr('Medium') }, { value: 'slow', label: tr('Slow') }]} onChange={(v) => set({ duration: v === 'fast' ? 400 : v === 'medium' ? 800 : 1500 })} /></Field>
-              {'directions' in info && <Field label={tr('Direction')}><Select value={t.direction ?? info.directions![0]} options={info.directions!.map((d) => ({ value: d, label: tr(d) }))} onChange={(v) => set({ direction: v })} /></Field>}
-              <Field label={tr('Easing')}><Select value={t.easing ?? 'easeInOut'} options={EASINGS.map((e) => ({ value: e, label: tr(e) }))} onChange={(v) => set({ easing: v })} /></Field>
-              <Field label={tr('Sound')}><Select value={t.sound ?? 'none'} options={['none', 'click', 'whoosh', 'chime'].map((s) => ({ value: s, label: tr(s) }))} onChange={(v) => set({ sound: v as Transition['sound'] })} /></Field>
-              <Field label={tr('Delay')}><NumberInput value={t.delay ?? 0} min={0} step={100} suffix="ms" onChange={(v) => set({ delay: v || undefined })} /></Field>
+              {'directions' in info && <Field label={tr('Direction')}><Select value={t.direction ?? info.directions![0]} options={info.directions!.map((d) => ({ value: d, label: tr(directionLabel('transition', d)) }))} onChange={(v) => set({ direction: v })} /></Field>}
+              <Field label={tr('Speed style')}><Select value={t.easing ?? 'easeInOut'} options={EASINGS.map((e) => ({ value: e, label: tr(EASING_LABEL[e] ?? e) }))} onChange={(v) => set({ easing: v })} /></Field>
+              <Field label={tr('Sound')}><Select value={t.sound ?? 'none'} options={['none', 'click', 'whoosh', 'chime'].map((s) => ({ value: s, label: tr(SOUND_LABEL[s]) }))} onChange={(v) => set({ sound: v as Transition['sound'] })} /></Field>
+              <Field label={tr('Wait before start (seconds)')}><NumberInput value={(t.delay ?? 0) / 1000} min={0} max={30} step={0.1} suffix="s" onChange={(v) => set({ delay: v ? Math.round(v * 1000) : undefined })} /></Field>
             </div>
             <Toggle checked={t.advanceOnClick !== false} onChange={(v) => set({ advanceOnClick: v ? undefined : false })} label={tr('Advance on click')} />
-            <Field label={tr('Auto advance after')}><NumberInput value={t.autoAdvance ? t.autoAdvance / 1000 : undefined} min={0} step={0.5} suffix="s" onChange={(v) => set({ autoAdvance: v ? v * 1000 : undefined })} /></Field>
+            <Field label={tr('Go to next slide automatically after (seconds)')} hint={tr('Leave empty to wait for a click.')}><NumberInput value={t.autoAdvance ? t.autoAdvance / 1000 : undefined} min={0} step={0.5} suffix="s" onChange={(v) => set({ autoAdvance: v ? v * 1000 : undefined })} /></Field>
           </>
         )}
         <Button size="sm" variant="primary" icon={<Play size={12} />} disabled={idx === 0 && t.type !== 'none'} onClick={() => setPreview(true)} data-testid="preview-transition">{tr('Preview transition')}</Button>

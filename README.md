@@ -45,7 +45,7 @@ Build `dist:win` on Windows (or on Linux with Wine installed). The GitHub Action
 
 | Command | What it covers |
 |---|---|
-| `npm test` | Unit tests: parsers (JSON/JS/TSX/HTML/Markdown), Auto Fix, validator, 34 layouts, 15 chart types, 18 diagram kinds, animation timeline, layout assistant, 5 sample decks, PPTX export + post-validation of every element/transition, quality checker, prompt generator & compatibility, backend API (auth, CRUD, versions, sharing, uploads, media proxy security) |
+| `npm test` | Unit tests: PPTX import (round trip of all samples, python-pptx and LibreOffice decks), parsers (JSON/JS/TSX/HTML/Markdown), Auto Fix, validator, 34 layouts, 15 chart types, 18 diagram kinds, animation timeline, layout assistant, 5 sample decks, PPTX export + post-validation of every element/transition, quality checker, prompt generator & compatibility, backend API (auth, CRUD, versions, sharing, uploads, media proxy security) |
 | `npm run test:e2e` | Playwright end-to-end: import → render → edit/drag/inline text → add/duplicate/delete slide → undo/redo → animation & transition → save → reload → present/presenter → export PPTX (opened with python-pptx) → export PDF → Prompt Center download → Auto Fix flow |
 | `npm run typecheck` | Frontend + server TypeScript |
 | `npm run verify:pptx -- file.pptx` | Inspect an exported deck with python-pptx |
@@ -97,6 +97,14 @@ Native & editable: text (runs, bullets, spacing), shapes (incl. gradients via OO
 Transitions are written as `<p:transition>` (Morph as `p159:morph` with a fade fallback; objects named `!!id`). Animations are written as `<p:timing>` trees with real shape ids.
 Partial / honest limits (shown in the export report before exporting): waterfall/funnel/histogram/treemap become editable shapes (not chart objects), decorative & 3D visuals and formulas are pictures, some web-only effects are approximated (e.g. Blur In → Fade), `onExit` triggers and transition sounds are web-only. MP4 video export is not implemented. Every exported file is re-opened and validated (ZIP, XML well-formedness, element order, relationships, shape ids, slide count, notes) before it is offered for download.
 Verified with python-pptx and LibreOffice in CI-like runs; Microsoft PowerPoint itself was not available in the build environment.
+
+## PowerPoint import (.pptx)
+
+Open an existing deck with **Import → Open PowerPoint (.pptx)**, by dropping a `.pptx` on the Import page or the Dashboard, or in the desktop app with **File → Open PowerPoint file… (Ctrl+Shift+O)**. The importer (`src/pptx-import`, pure TypeScript: JSZip + fast-xml-parser, no server) rebuilds every slide as editable SlideCraft objects and shows a report before anything is saved.
+
+- **Imported natively:** slide size, hidden slides, notes; text boxes and placeholders with layout/master inheritance (position, fonts, sizes, colors, bold/italic/underline, bullets & numbering with levels, alignment, insets, autofit scale, hyperlinks); preset shapes with solid/gradient fills, outlines, shadows, rotation/flip; lines & connectors with arrow heads; pictures (crop, circle/rounded masks, SVG); tables; native charts (bar, column, stacked, line, area, pie, doughnut, scatter, bubble, radar, bar+line combo) with categories, values, series colors, number formats; groups; slide backgrounds (color, gradient, picture); theme colors & fonts; transitions (incl. Morph) and entrance/emphasis/exit/motion-path animations with their triggers; embedded video/audio (< 40 MB); master/layout decorations.
+- **Approximated (listed in the report):** freeform shapes → vector graphics (SVG), SmartArt → group of shapes, elbow connectors → straight lines, uncommon transitions/animations → closest effect, merged table cells, 3-D/stock charts, rotated groups, equations → text.
+- **Not imported (placeholder + warning, text never dropped silently):** Office 2016 charts (waterfall/treemap/funnel…), EMF/WMF/TIFF pictures, OLE objects without a preview, ink, password-protected files, old binary `.ppt`.
 
 ## Security
 

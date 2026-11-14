@@ -92,7 +92,7 @@ export const REGISTRY: Record<string, string> = {
   'Conversion through sequential stages': 'Tỷ lệ chuyển đổi qua các giai đoạn liên tiếp',
   'Combo (bar + line)': 'Kết hợp (cột + đường)',
   'Volume vs rate on two axes': 'Khối lượng và tỷ lệ trên hai trục',
-  Histogram: 'Histogram',
+  Histogram: 'Biểu đồ phân bố (Histogram)',
   'Distribution of raw numeric values': 'Phân bố của các giá trị số thô',
   Treemap: 'Treemap',
   'Hierarchical share with many items': 'Tỷ trọng phân cấp với nhiều mục',

@@ -8,8 +8,8 @@ import { uid } from '@/utils/id';
 import { Badge, Button, Field, IconButton, NumberInput, Section, Select, inputCls } from '@/components/ui';
 import { ANIMATION_PRESETS, applyPreset, buildTimeline, categoryOf } from './engine';
 import { canvasPreview } from './preview';
+import { CATEGORY_HELP, CATEGORY_LABEL as CAT_LABEL, EASING_LABEL, EFFECT_HELP, TRIGGER_LABEL, directionLabel, supportLabel } from './labels';
 
-const CAT_LABEL: Record<AnimationCategory, string> = { entrance: 'Entrance', emphasis: 'Emphasis', exit: 'Exit', motion: 'Motion path' };
 const DEFAULT_EFFECT: Record<AnimationCategory, string> = { entrance: 'fadeIn', emphasis: 'pulse', exit: 'fadeOut', motion: 'motionLine' };
 const support = (e: string) => (ANIMATION_EFFECTS as Record<string, { pptx: string }>)[e]?.pptx;
 
@@ -40,7 +40,7 @@ export function AnimationPanel() {
         </div>
         <Field label={tr('Animation preset')}>
           <div className="flex gap-1.5">
-            <Select value={preset} options={ANIMATION_PRESETS.map((p) => ({ value: p.id, label: p.name }))} onChange={setPreset} />
+            <Select value={preset} options={ANIMATION_PRESETS.map((p) => ({ value: p.id, label: tr(p.name) }))} onChange={setPreset} />
           </div>
         </Field>
         <p className="text-[11px] text-ink-400">{tr(ANIMATION_PRESETS.find((p) => p.id === preset)?.description ?? '')}</p>
@@ -53,7 +53,7 @@ export function AnimationPanel() {
       {el && (
         <Section title={`${tr('Element')}: ${el.name ?? tr(ELEMENT_TYPES[el.type]?.label ?? el.type)}`}>
           <div className="grid grid-cols-2 gap-1.5">
-            {(Object.keys(CAT_LABEL) as AnimationCategory[]).map((c) => <Button key={c} size="sm" icon={<Plus size={12} />} onClick={() => add(c)} data-testid={`add-anim-${c}`}>{tr(CAT_LABEL[c])}</Button>)}
+            {(Object.keys(CAT_LABEL) as AnimationCategory[]).map((c) => <Button key={c} size="sm" icon={<Plus size={12} />} title={tr(CATEGORY_HELP[c])} onClick={() => add(c)} data-testid={`add-anim-${c}`}>{tr(CAT_LABEL[c])}</Button>)}
           </div>
           {anims.map((a, i) => {
             const cat = categoryOf(a.effect) as AnimationCategory;
@@ -62,31 +62,32 @@ export function AnimationPanel() {
               <div key={a.id ?? i} className="space-y-2 rounded-xl border border-ink-200 p-2.5 dark:border-ink-700">
                 <div className="flex items-center gap-1.5">
                   <Badge tone={cat === 'entrance' ? 'green' : cat === 'exit' ? 'red' : cat === 'motion' ? 'blue' : 'amber'}>{tr(CAT_LABEL[cat])}</Badge>
-                  <Badge tone={support(a.effect) === 'supported' ? 'green' : 'amber'}>PPTX: {tr(support(a.effect) ?? '')}</Badge>
+                  <Badge tone={support(a.effect) === 'supported' ? 'green' : 'amber'}>{tr(supportLabel(support(a.effect)))}</Badge>
                   <div className="flex-1" />
                   <IconButton title={tr('Preview')} onClick={() => void canvasPreview.playOne({ elId: el.id, anim: a, start: 0, end: a.duration ?? 600, category: cat, el }, doc.size)}><Play size={13} /></IconButton>
                   <IconButton title={tr('Remove')} onClick={() => setAnims(anims.filter((_, j) => j !== i), 'Remove animation')}><Trash2 size={13} /></IconButton>
                 </div>
-                <Select value={a.effect} options={ANIMATION_EFFECT_IDS.filter((e) => categoryOf(e) === cat).map((e) => ({ value: e, label: tr(ANIMATION_EFFECTS[e].label) }))} onChange={(v) => patch(i, { effect: v })} testId="anim-effect" />
-                {info?.ppt?.note && <p className="text-[11px] text-amber-600 dark:text-amber-400">PowerPoint: {tr(info.ppt.note)}</p>}
+                <Select value={a.effect} options={ANIMATION_EFFECT_IDS.filter((e) => categoryOf(e) === cat).map((e) => ({ value: e, label: tr(ANIMATION_EFFECTS[e].label) }))} onChange={(v) => patch(i, { effect: v, direction: undefined })} testId="anim-effect" />
+                {EFFECT_HELP[a.effect] && <p className="text-[11.5px] leading-snug text-ink-600 dark:text-ink-300" data-testid="anim-effect-help"><b>{tr(ANIMATION_EFFECTS[a.effect as keyof typeof ANIMATION_EFFECTS]?.label ?? a.effect)}:</b> {tr(EFFECT_HELP[a.effect])}</p>}
+                {info?.ppt?.note && <p className="text-[11px] text-amber-600 dark:text-amber-400">{tr('In PowerPoint')}: {tr(info.ppt.note)}</p>}
                 <div className="grid grid-cols-2 gap-1.5">
-                  <Field label={tr('Trigger')}><Select value={a.trigger ?? 'onClick'} options={ANIMATION_TRIGGER_IDS.map((t) => ({ value: t, label: tr(t) }))} onChange={(v) => patch(i, { trigger: v })} /></Field>
-                  <Field label={tr('Easing')}><Select value={a.easing ?? 'easeOut'} options={EASINGS.map((e) => ({ value: e, label: tr(e) }))} onChange={(v) => patch(i, { easing: v })} /></Field>
-                  <Field label={tr('Duration')}><NumberInput value={a.duration ?? 600} min={50} max={60000} step={50} suffix="ms" onChange={(v) => patch(i, { duration: v })} /></Field>
-                  <Field label={tr('Delay')}><NumberInput value={a.delay ?? 0} min={0} max={60000} step={50} suffix="ms" onChange={(v) => patch(i, { delay: v })} /></Field>
-                  <Field label={tr('Repeat')}><Select value={a.repeat === 'infinite' ? 'infinite' : String(a.repeat ?? 0)} options={[...['0', '1', '2', '3', '5'].map((v) => ({ value: v, label: v === '0' ? tr('None') : `${v}×` })), { value: 'infinite', label: tr('Until next click') }]} onChange={(v) => patch(i, { repeat: v === 'infinite' ? 'infinite' : Number(v) })} /></Field>
-                  <Field label={tr('Order')}><NumberInput value={a.order ?? 0} step={1} onChange={(v) => patch(i, { order: v })} /></Field>
-                  {info?.directions && <Field label={tr('Direction')}><Select value={a.direction ?? info.directions[0]} options={info.directions.map((d) => ({ value: d, label: tr(d) }))} onChange={(v) => patch(i, { direction: v })} /></Field>}
-                  {(a.effect === 'growShrink' || a.effect === 'pulse') && <Field label={tr('Scale')}><NumberInput value={a.scale ?? (a.effect === 'pulse' ? 1.08 : 1.15)} step={0.05} min={0.1} max={4} onChange={(v) => patch(i, { scale: v })} /></Field>}
-                  {a.effect === 'transparency' && <Field label={tr('Target opacity')}><NumberInput value={a.opacity ?? 0.35} step={0.05} min={0} max={1} onChange={(v) => patch(i, { opacity: v })} /></Field>}
-                  {a.effect === 'colorChange' && <Field label={tr('Color')}><input className={inputCls} defaultValue={a.color ?? '#ef4444'} onBlur={(e) => patch(i, { color: e.target.value })} /></Field>}
+                  <Field label={tr('Start')} className="col-span-2"><Select value={a.trigger ?? 'onClick'} options={ANIMATION_TRIGGER_IDS.map((t) => ({ value: t, label: tr(TRIGGER_LABEL[t] ?? t) }))} onChange={(v) => patch(i, { trigger: v })} testId="anim-trigger" /></Field>
+                  <Field label={tr('Speed style')}><Select value={a.easing ?? 'easeOut'} options={EASINGS.map((e) => ({ value: e, label: tr(EASING_LABEL[e] ?? e) }))} onChange={(v) => patch(i, { easing: v })} testId="anim-easing" /></Field>
+                  <Field label={tr('Duration (seconds)')}><NumberInput value={(a.duration ?? 600) / 1000} min={0.05} max={60} step={0.1} suffix="s" onChange={(v) => patch(i, { duration: Math.round(v * 1000) })} testId="anim-duration" /></Field>
+                  <Field label={tr('Wait before start (seconds)')}><NumberInput value={(a.delay ?? 0) / 1000} min={0} max={60} step={0.1} suffix="s" onChange={(v) => patch(i, { delay: Math.round(v * 1000) })} testId="anim-delay" /></Field>
+                  <Field label={tr('Repeat')}><Select value={a.repeat === 'infinite' ? 'infinite' : String(a.repeat ?? 0)} options={[...['0', '1', '2', '3', '5'].map((v) => ({ value: v, label: v === '0' ? tr('No repeat') : tr('Repeat {n} times', { n: v }) })), { value: 'infinite', label: tr('Repeat until the next click') }]} onChange={(v) => patch(i, { repeat: v === 'infinite' ? 'infinite' : Number(v) })} /></Field>
+                  <Field label={tr('Play order')}><NumberInput value={a.order ?? 0} step={1} min={0} onChange={(v) => patch(i, { order: v })} testId="anim-order" /></Field>
+                  {info?.directions && <Field label={tr('Direction')}><Select value={a.direction ?? info.directions[0]} options={info.directions.map((d) => ({ value: d, label: tr(directionLabel(a.effect, d)) }))} onChange={(v) => patch(i, { direction: v })} /></Field>}
+                  {(a.effect === 'growShrink' || a.effect === 'pulse') && <Field label={tr('Size (%)')}><NumberInput value={Math.round((a.scale ?? (a.effect === 'pulse' ? 1.08 : 1.15)) * 100)} step={5} min={10} max={400} suffix="%" onChange={(v) => patch(i, { scale: v / 100 })} /></Field>}
+                  {a.effect === 'transparency' && <Field label={tr('Visibility at the end (%)')}><NumberInput value={Math.round((a.opacity ?? 0.35) * 100)} step={5} min={0} max={100} suffix="%" onChange={(v) => patch(i, { opacity: v / 100 })} /></Field>}
+                  {a.effect === 'colorChange' && <Field label={tr('Color')}><div className="flex gap-1"><input type="color" className="h-8 w-9 shrink-0 cursor-pointer rounded border border-ink-200 dark:border-ink-700" value={/^#[0-9a-f]{6}$/i.test(a.color ?? '') ? a.color : '#ef4444'} onChange={(e) => patch(i, { color: e.target.value })} /><input className={inputCls} key={a.color} defaultValue={a.color ?? '#ef4444'} onBlur={(e) => patch(i, { color: e.target.value })} /></div></Field>}
                 </div>
                 <p className="text-[11px] text-ink-400">{tr(ANIMATION_TRIGGERS[a.trigger ?? 'onClick'])}</p>
                 {cat === 'motion' && (
                   <div className="grid grid-cols-3 gap-1.5">
-                    {a.effect !== 'motionCircle' && a.effect !== 'motionPath' && <><Field label={tr('dx')}><NumberInput value={a.path?.dx ?? 400} onChange={(v) => patch(i, { path: { type: a.effect === 'motionCurve' ? 'curve' : 'line', ...a.path, dx: v } })} /></Field><Field label={tr('dy')}><NumberInput value={a.path?.dy ?? 0} onChange={(v) => patch(i, { path: { type: a.effect === 'motionCurve' ? 'curve' : 'line', ...a.path, dy: v } })} /></Field></>}
-                    {a.effect === 'motionCircle' && <Field label={tr('Radius')}><NumberInput value={a.path?.radius ?? 150} min={10} onChange={(v) => patch(i, { path: { type: 'circle', ...a.path, radius: v } })} /></Field>}
-                    {a.effect === 'motionPath' && <Field label={tr('SVG path (relative)')} className="col-span-3"><input className={inputCls} defaultValue={a.path?.d ?? 'M0 0 C 200 -200 400 200 600 0'} onBlur={(e) => patch(i, { path: { type: 'custom', d: e.target.value } })} /></Field>}
+                    {a.effect !== 'motionCircle' && a.effect !== 'motionPath' && <><Field label={tr('Move horizontally (px)')} className="col-span-3"><NumberInput value={a.path?.dx ?? 400} onChange={(v) => patch(i, { path: { type: a.effect === 'motionCurve' ? 'curve' : 'line', ...a.path, dx: v } })} /></Field><Field label={tr('Move vertically (px)')} className="col-span-3"><NumberInput value={a.path?.dy ?? 0} onChange={(v) => patch(i, { path: { type: a.effect === 'motionCurve' ? 'curve' : 'line', ...a.path, dy: v } })} /></Field></>}
+                    {a.effect === 'motionCircle' && <Field label={tr('Circle radius (px)')} className="col-span-3"><NumberInput value={a.path?.radius ?? 150} min={10} step={10} onChange={(v) => patch(i, { path: { type: 'circle', ...a.path, radius: v } })} /></Field>}
+                    {a.effect === 'motionPath' && <Field label={tr('Custom path (SVG, relative to the object)')} className="col-span-3"><input className={inputCls} defaultValue={a.path?.d ?? 'M0 0 C 200 -200 400 200 600 0'} onBlur={(e) => patch(i, { path: { type: 'custom', d: e.target.value } })} /></Field>}
                   </div>
                 )}
               </div>
